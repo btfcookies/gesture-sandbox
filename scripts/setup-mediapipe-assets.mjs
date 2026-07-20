@@ -5,9 +5,10 @@
 //
 // Usage: node scripts/setup-mediapipe-assets.mjs
 
-import { existsSync, mkdirSync, copyFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, copyFileSync, readdirSync, writeFileSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { createHash } from 'node:crypto'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 
@@ -18,6 +19,14 @@ const MODEL_URL =
   'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task'
 const MODEL_DEST_DIR = join(ROOT, 'public/models')
 const MODEL_DEST = join(MODEL_DEST_DIR, 'hand_landmarker.task')
+// Pinned from the file downloaded from MODEL_URL above; verified on every
+// build so a tampered or unexpectedly changed upstream blob never gets
+// silently bundled into the shipped app.
+const MODEL_SHA256 = 'fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1'
+
+function sha256(bytes) {
+  return createHash('sha256').update(bytes).digest('hex')
+}
 
 function copyWasmRuntime() {
   if (!existsSync(WASM_SRC)) {
@@ -32,7 +41,14 @@ function copyWasmRuntime() {
 
 async function downloadModel() {
   if (existsSync(MODEL_DEST)) {
-    console.log(`Model already present at ${MODEL_DEST}, skipping download.`)
+    const existingHash = sha256(readFileSync(MODEL_DEST))
+    if (existingHash !== MODEL_SHA256) {
+      throw new Error(
+        `Model at ${MODEL_DEST} does not match the pinned checksum ` +
+          `(expected ${MODEL_SHA256}, got ${existingHash}). Delete it and re-run to fetch a clean copy.`,
+      )
+    }
+    console.log(`Model already present at ${MODEL_DEST} and checksum verified, skipping download.`)
     return
   }
   mkdirSync(MODEL_DEST_DIR, { recursive: true })
@@ -42,6 +58,13 @@ async function downloadModel() {
     throw new Error(`Failed to download model: ${response.status} ${response.statusText}`)
   }
   const bytes = new Uint8Array(await response.arrayBuffer())
+  const actualHash = sha256(bytes)
+  if (actualHash !== MODEL_SHA256) {
+    throw new Error(
+      `Downloaded model checksum mismatch (expected ${MODEL_SHA256}, got ${actualHash}). ` +
+        `Refusing to write a file that doesn't match the pinned hash.`,
+    )
+  }
   writeFileSync(MODEL_DEST, bytes)
   console.log(`Saved model -> ${MODEL_DEST}`)
 }
