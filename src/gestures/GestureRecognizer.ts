@@ -77,14 +77,10 @@ export class GestureRecognizer extends EventEmitter<GestureEvents> {
 
     for (const hand of frame.hands) {
       for (const detector of this.handDetectors) {
-        this.reconcile(
-          detector.name,
-          hand.handedness,
-          detector.isActive(hand),
-          hand.palmPosition,
-          frame.timestampMs,
-          stillActive,
-        )
+        // Pinch is anchored to where the thumb and index tip actually meet,
+        // not the palm centroid, so a dragged object follows the fingers.
+        const position = detector.name === 'pinch' ? hand.pinchPosition : hand.palmPosition
+        this.reconcile(detector.name, hand.handedness, detector.isActive(hand), position, frame.timestampMs, stillActive)
       }
     }
 

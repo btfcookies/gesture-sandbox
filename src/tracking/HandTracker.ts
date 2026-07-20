@@ -5,6 +5,7 @@ import { HandSmoother } from './HandSmoother.ts'
 import { FINGER_NAMES } from './handLandmarks.ts'
 import {
   computePalmPosition,
+  computePinchPosition,
   computePalmNormal,
   computeHandRotation,
   computeFingerMetrics,
@@ -78,6 +79,7 @@ export class HandTracker {
         worldLandmarks,
         wrist: landmarks[0]!,
         palmPosition: computePalmPosition(landmarks),
+        pinchPosition: computePinchPosition(landmarks),
         palmNormal: computePalmNormal(worldLandmarks),
         rotation: computeHandRotation(worldLandmarks),
         fingers,

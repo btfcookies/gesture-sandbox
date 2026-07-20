@@ -24,6 +24,8 @@ export interface TrackedHand {
   wrist: THREE.Vector3
   /** Normalized image-space centroid of the wrist and finger base joints. */
   palmPosition: THREE.Vector3
+  /** Normalized image-space midpoint of the thumb tip and index tip — where a pinch actually happens. */
+  pinchPosition: THREE.Vector3
   /** Unit vector, direction the palm faces, in metric hand space. */
   palmNormal: THREE.Vector3
   /** Hand orientation in metric hand space. */

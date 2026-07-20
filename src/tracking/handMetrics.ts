@@ -14,6 +14,13 @@ export function computePalmPosition(landmarks: THREE.Vector3[]): THREE.Vector3 {
   return sum.divideScalar(PALM_LANDMARKS.length)
 }
 
+/** Midpoint of the thumb tip and index tip, in whatever space `landmarks` is expressed in — where a pinch actually happens, as opposed to the palm centroid. */
+export function computePinchPosition(landmarks: THREE.Vector3[]): THREE.Vector3 {
+  const thumbTip = landmarks[HAND_LANDMARK.THUMB_TIP]!
+  const indexTip = landmarks[HAND_LANDMARK.INDEX_TIP]!
+  return thumbTip.clone().add(indexTip).multiplyScalar(0.5)
+}
+
 /** Unit vector normal to the palm plane (wrist, index MCP, pinky MCP), in metric hand space. */
 export function computePalmNormal(worldLandmarks: THREE.Vector3[]): THREE.Vector3 {
   const wrist = worldLandmarks[HAND_LANDMARK.WRIST]!
