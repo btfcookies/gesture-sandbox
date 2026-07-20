@@ -6,7 +6,7 @@
   "scripts": {
     "setup:assets": "node scripts/setup-mediapipe-assets.mjs",
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "node scripts/setup-mediapipe-assets.mjs && tsc && vite build",
     "preview": "vite preview"
   },
   "devDependencies": {
