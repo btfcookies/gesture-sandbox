@@ -94,9 +94,8 @@ export class CameraPreviewWidget {
     await this.camera.start()
   }
 
-  /** Call once per render tick with the latest tracked hands to draw their skeletons over the feed. */
+  /** Call once per render tick with the latest tracked hands to draw their skeletons. */
   updateHands(hands: readonly TrackedHand[]): void {
-    if (!this.cameraVisible) return // preview hidden — skip drawing to the offscreen canvas
     const { width, height } = this.landmarkCanvas
     this.landmarkCtx.clearRect(0, 0, width, height)
     if (width === 0 || height === 0) return
@@ -159,10 +158,11 @@ export class CameraPreviewWidget {
   }
 
   /**
-   * Toggles whether the camera feed and landmark overlay are rendered. The
-   * underlying MediaStream keeps running either way, so hand tracking and
-   * gesture recognition continue working "in the background" while the user
-   * focuses on just the 3D scene.
+   * Toggles whether the camera passthrough feed is rendered. The landmark
+   * overlay stays visible either way (the user wants to see their hand
+   * skeleton even with the camera off). The underlying MediaStream also keeps
+   * running, so hand tracking and gesture recognition continue working "in
+   * the background" while the user focuses on just the 3D scene.
    */
   private setPreviewVisible(visible: boolean): void {
     this.cameraVisible = visible
