@@ -19,7 +19,7 @@ import { ObjectSpawnController } from './objects/ObjectSpawnController.ts'
 import { ManipulationController } from './objects/ManipulationController.ts'
 import { exportScene, importScene } from './objects/SceneSerializer.ts'
 import { PhysicsController } from './physics/PhysicsController.ts'
-import type { Handedness } from './tracking/types.ts'
+import type { Handedness, HandTrackingFrame } from './tracking/types.ts'
 import type { GestureName } from './gestures/types.ts'
 
 const app = document.querySelector<HTMLDivElement>('#app')!
@@ -76,6 +76,19 @@ const manipulationController = new ManipulationController(
 
 let trackingPaused = false
 
+const EMPTY_TRACKING_FRAME: HandTrackingFrame = { hands: [], timestampMs: 0 }
+
+// MediaPipe inference + the mirrored-frame canvas redraw it runs on are the
+// most expensive thing in this app's per-frame budget. Running that at every
+// rAF (potentially 90-144Hz on high refresh displays) bought no tracking
+// benefit — webcams themselves only deliver ~30fps — and blocked rendering
+// with it. Decoupling detection onto its own 30Hz cadence lets the render
+// loop (orbit controls, tweens, the 3D scene) run at full display refresh
+// while gesture tracking updates at a rate that already matches its source.
+const TRACKING_INTERVAL_MS = 1000 / 30
+let lastTrackingAtMs = -Infinity
+let latestTrackingFrame: HandTrackingFrame = EMPTY_TRACKING_FRAME
+
 const toolbar = new Toolbar(app, {
   onUndo: () => history.undo(),
   onRedo: () => history.redo(),
@@ -120,16 +133,22 @@ new KeyboardShortcuts({
 sceneManager.addTickCallback((delta, _elapsed) => {
   physicsController.update(delta)
 
-  let frame = { hands: [] as ReturnType<HandTracker['update']>['hands'], timestampMs: performance.now() }
-
-  if (!trackingPaused && !gestureGuide.isOpen) {
-    const video = cameraPreview.videoElement
-    frame = handTracker.update(video, performance.now())
-    manipulationController.updateHover(frame)
-    gestureRecognizer.update(frame)
-    objectSpawnController.update(frame)
-    manipulationController.update(frame, delta)
+  if (trackingPaused || gestureGuide.isOpen) {
+    latestTrackingFrame = EMPTY_TRACKING_FRAME
+    lastTrackingAtMs = -Infinity // resume instantly (no stale-interval wait) once unpaused
+  } else {
+    const now = performance.now()
+    if (now - lastTrackingAtMs >= TRACKING_INTERVAL_MS) {
+      lastTrackingAtMs = now
+      latestTrackingFrame = handTracker.update(cameraPreview.videoElement, now)
+    }
+    manipulationController.updateHover(latestTrackingFrame)
+    gestureRecognizer.update(latestTrackingFrame)
+    objectSpawnController.update(latestTrackingFrame)
+    manipulationController.update(latestTrackingFrame, delta)
   }
+
+  const frame = latestTrackingFrame
 
   const handGestureNames = new Map<Handedness, GestureName[]>()
   for (const hand of frame.hands) {

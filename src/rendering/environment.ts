@@ -32,14 +32,18 @@ export function createEnvironment(scene: THREE.Scene, renderer: THREE.WebGLRende
   const key = new THREE.DirectionalLight(0xffffff, 1.0)
   key.position.set(4, 6, 3)
   key.castShadow = true
-  key.shadow.mapSize.set(2048, 2048)
+  // Halved from 2048: this is a single small AR-style scene (a few primitives
+  // over a 6-unit floor), so 1024 shows no visible banding while cutting the
+  // shadow pass's fill cost to a quarter. shadow.radius was dropped — it only
+  // does anything under VSMShadowMap, and the renderer now uses PCFShadowMap
+  // (see SceneManager), where it's silently ignored.
+  key.shadow.mapSize.set(1024, 1024)
   key.shadow.camera.near = 1
   key.shadow.camera.far = 20
   key.shadow.camera.left = -6
   key.shadow.camera.right = 6
   key.shadow.camera.top = 6
   key.shadow.camera.bottom = -6
-  key.shadow.radius = 4
   key.shadow.bias = -0.0005
   scene.add(key)
   scene.add(key.target)

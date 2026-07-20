@@ -27,11 +27,23 @@ export class SceneManager {
     this.camera.position.set(5, 3.6, 6.5)
     this.camera.lookAt(0, 0.6, 0)
 
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
+    // antialias is intentionally off: the scene renders through an
+    // EffectComposer (see postprocessing.ts), which draws into its own plain
+    // (non-multisampled) render target — MSAA on this context's backbuffer
+    // never gets used, so enabling it here would only cost GPU memory/bandwidth.
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: true })
     this.renderer.setClearColor(0x000000, 0)
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    // Capped below the display's native ratio: at 3x on common high-DPI
+    // laptops, shadows + bloom + a full alpha-composited canvas over live
+    // video were pushing well past what integrated GPUs keep up with at 60fps.
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5))
     this.renderer.shadowMap.enabled = true
-    this.renderer.shadowMap.type = THREE.VSMShadowMap
+    // PCFShadowMap instead of VSMShadowMap: VSM runs an extra blur render
+    // pass per shadow-casting light every frame; PCF samples within the
+    // shading pass itself for close-enough quality at lower cost here.
+    // (PCFSoftShadowMap is deprecated in this three.js version and silently
+    // downgrades to PCFShadowMap anyway, with a console warning.)
+    this.renderer.shadowMap.type = THREE.PCFShadowMap
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping
     this.renderer.toneMappingExposure = 0.9
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
