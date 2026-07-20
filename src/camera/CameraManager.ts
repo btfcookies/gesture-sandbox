@@ -23,12 +23,34 @@ export class CameraManager {
   async start(): Promise<void> {
     this.setStatus('requesting')
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false })
+      const stream = await this.requestStream()
       await this.attachStream(stream)
       await this.refreshDeviceList()
       this.setStatus('ready')
     } catch (err) {
       this.handleError(err)
+    }
+  }
+
+  /**
+   * Requests a stream, preferring a front-facing camera but falling back to
+   * an unconstrained video request. Desktop/external webcams frequently don't
+   * report a facingMode capability at all, and some browsers reject a
+   * facingMode constraint outright (OverconstrainedError) rather than
+   * treating it as a soft preference, which otherwise surfaces as a generic
+   * "could not start the camera" failure on an otherwise-working device.
+   */
+  private async requestStream(constraints?: MediaTrackConstraints): Promise<MediaStream> {
+    try {
+      return await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'user' }, ...constraints },
+        audio: false,
+      })
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'OverconstrainedError' && !constraints?.deviceId) {
+        return navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+      }
+      throw err
     }
   }
 
@@ -38,10 +60,7 @@ export class CameraManager {
     const deviceId = this.devices[this.currentIndex]!.deviceId
     this.setStatus('requesting')
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { deviceId: { exact: deviceId } },
-        audio: false,
-      })
+      const stream = await this.requestStream({ deviceId: { exact: deviceId } })
       await this.attachStream(stream)
       this.setStatus('ready')
     } catch (err) {
@@ -71,10 +90,15 @@ export class CameraManager {
 
   private handleError(err: unknown): void {
     this.stop()
+    console.error('[CameraManager] failed to start camera:', err)
     if (err instanceof DOMException && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError')) {
       this.setStatus('denied', 'Camera access denied. Enable it in your browser settings to continue.')
     } else if (err instanceof DOMException && err.name === 'NotFoundError') {
       this.setStatus('unavailable', 'No camera found.')
+    } else if (err instanceof DOMException && err.name === 'NotReadableError') {
+      this.setStatus('error', 'Camera is unavailable — it may be in use by another app or blocked by your OS privacy settings.')
+    } else if (err instanceof DOMException && err.name === 'OverconstrainedError') {
+      this.setStatus('error', 'No camera matched the requested settings.')
     } else {
       this.setStatus('error', 'Could not start the camera.')
     }
