@@ -22,10 +22,12 @@ export class CameraPreviewWidget {
   private readonly camera: CameraManager
   private readonly statusEl: HTMLDivElement
   private readonly switchButton: HTMLButtonElement
+  private readonly toggleButton: HTMLButtonElement
   private readonly video: HTMLVideoElement
   private readonly landmarkCanvas: HTMLCanvasElement
   private readonly landmarkCtx: CanvasRenderingContext2D
   private readonly container: HTMLElement
+  private cameraVisible = true
 
   constructor(container: HTMLElement, sceneCanvas: HTMLCanvasElement) {
     const root = document.createElement('div')
@@ -62,6 +64,18 @@ export class CameraPreviewWidget {
     this.switchButton.addEventListener('click', () => void this.camera.switchCamera())
     root.appendChild(this.switchButton)
 
+    // Toggling the camera preview hides the video feed + landmark overlay but
+    // leaves the scene canvas (and the active tracking stream) running, so the
+    // hand-tracking pipeline keeps producing gestures in the background.
+    this.toggleButton = document.createElement('button')
+    this.toggleButton.id = 'camera-toggle'
+    this.toggleButton.type = 'button'
+    this.toggleButton.setAttribute('aria-label', 'Toggle camera preview')
+    this.toggleButton.title = 'Hide camera preview'
+    this.toggleButton.textContent = '◉'
+    this.toggleButton.addEventListener('click', () => this.setPreviewVisible(!this.cameraVisible))
+    root.appendChild(this.toggleButton)
+
     container.appendChild(root)
     this.container = root
 
@@ -82,6 +96,7 @@ export class CameraPreviewWidget {
 
   /** Call once per render tick with the latest tracked hands to draw their skeletons over the feed. */
   updateHands(hands: readonly TrackedHand[]): void {
+    if (!this.cameraVisible) return // preview hidden — skip drawing to the offscreen canvas
     const { width, height } = this.landmarkCanvas
     this.landmarkCtx.clearRect(0, 0, width, height)
     if (width === 0 || height === 0) return
@@ -141,5 +156,21 @@ export class CameraPreviewWidget {
     this.statusEl.textContent = message ?? STATUS_MESSAGES[status] ?? ''
     this.statusEl.style.display = status === 'ready' ? 'none' : 'flex'
     this.switchButton.disabled = status !== 'ready' || this.camera.deviceCount < 2
+  }
+
+  /**
+   * Toggles whether the camera feed and landmark overlay are rendered. The
+   * underlying MediaStream keeps running either way, so hand tracking and
+   * gesture recognition continue working "in the background" while the user
+   * focuses on just the 3D scene.
+   */
+  private setPreviewVisible(visible: boolean): void {
+    this.cameraVisible = visible
+    this.container.classList.toggle('camera-hidden', !visible)
+    this.toggleButton.textContent = visible ? '◉' : '○'
+    this.toggleButton.title = visible ? 'Hide camera preview' : 'Show camera preview'
+    // aria-pressed mirrors the toggle's "active/on" state — preview visible
+    // IS the active state, so it reads as pressed=true; hidden reads as off.
+    this.toggleButton.setAttribute('aria-pressed', visible ? 'true' : 'false')
   }
 }

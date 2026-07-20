@@ -122,6 +122,42 @@ body {
   cursor: default;
 }
 
+#camera-toggle {
+  position: absolute;
+  top: 16px;
+  right: 60px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--panel-border);
+  background: rgba(0, 0, 0, 0.5);
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1;
+  transition: background 0.2s;
+}
+
+#camera-toggle:hover {
+  background: rgba(0, 0, 0, 0.75);
+}
+
+/* When preview is toggled off, hide the video feed and landmark overlay but
+   keep the scene canvas + tracking pipeline running in the background.
+   Use visibility/opacity rather than display:none so the <video> element
+   stays in the layout — important because some browsers treat display:none
+   as a soft-pause for MediaStream-backed videos, which can stall
+   video.currentTime advancement and break MediaPipe's detector timestamps. */
+#camera-preview.camera-hidden video,
+#camera-preview.camera-hidden .camera-landmarks {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
 #debug-overlay {
   position: absolute;
   inset: 0;
