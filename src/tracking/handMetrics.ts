@@ -84,6 +84,17 @@ function computeCurl(worldJoints: THREE.Vector3[]): number {
 // briefly collapses.
 const MIN_HAND_SPAN = 0.02
 
+// Depth (z) is MediaPipe's least reliable axis, and it gets specifically
+// noisy under self-occlusion — exactly what happens when a pinch is held
+// sideways (edge-on to the camera), where the thumb tip sits almost
+// directly in front of/behind the index tip. Full, unweighted 3D distance
+// let that depth noise alone push a real pinch's ratio past PINCH_MAX_RATIO
+// and misread it as a grab. Weighting z down (rather than dropping it)
+// keeps the check mostly a 2D on-screen proximity test — which is
+// orientation-invariant for true finger contact — while still catching
+// fingers stacked toward the camera without actually touching.
+const PINCH_Z_WEIGHT = 0.3
+
 /**
  * Thumb-tip-to-index-tip distance, expressed as a ratio of the hand's own
  * span (wrist to middle-finger knuckle) rather than raw meters. MediaPipe's
@@ -99,7 +110,11 @@ export function computePinchDistance(worldLandmarks: THREE.Vector3[]): number {
   const wrist = worldLandmarks[HAND_LANDMARK.WRIST]!
   const middleMcp = worldLandmarks[HAND_LANDMARK.MIDDLE_MCP]!
   const handSpan = Math.max(wrist.distanceTo(middleMcp), MIN_HAND_SPAN)
-  return thumbTip.distanceTo(indexTip) / handSpan
+  const dx = thumbTip.x - indexTip.x
+  const dy = thumbTip.y - indexTip.y
+  const dz = (thumbTip.z - indexTip.z) * PINCH_Z_WEIGHT
+  const pinchDistance = Math.sqrt(dx * dx + dy * dy + dz * dz)
+  return pinchDistance / handSpan
 }
 
 /** 0 (closed fist) .. 1 (fully open), from the average curl of the four non-thumb fingers. */
