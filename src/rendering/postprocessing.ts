@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js'
+import { TexturePass } from 'three/examples/jsm/postprocessing/TexturePass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 
 export interface PostProcessing {
@@ -41,48 +41,66 @@ const MIX_FRAGMENT_SHADER = `
  * rendered into its own offscreen composer instead, and only its RGB is
  * mixed back into the base render — which keeps the base render's real
  * alpha (transparent where there's no scene geometry) intact.
+ *
+ * The scene itself is rendered exactly once per frame, into `baseTarget`.
+ * Both the bloom chain and the final mix read that same texture (via
+ * TexturePass) instead of each owning their own RenderPass — an earlier
+ * version gave bloomComposer and composer their own RenderPass instances,
+ * which drew every object in the scene twice per frame for no visual
+ * difference and was the single biggest cost in the render loop.
  */
 export function createPostProcessing(
   renderer: THREE.WebGLRenderer,
   scene: THREE.Scene,
   camera: THREE.Camera,
 ): PostProcessing {
-  const renderPass = new RenderPass(scene, camera)
-  renderPass.clearAlpha = 0
+  const pixelRatio = renderer.getPixelRatio()
+  const size = renderer.getSize(new THREE.Vector2())
+  const baseTarget = new THREE.WebGLRenderTarget(size.width * pixelRatio, size.height * pixelRatio, {
+    type: THREE.HalfFloatType,
+  })
+  baseTarget.texture.name = 'PostProcessing.base'
 
   const bloomComposer = new EffectComposer(renderer)
   bloomComposer.renderToScreen = false
-  bloomComposer.addPass(renderPass)
+  bloomComposer.addPass(new TexturePass(baseTarget.texture))
   const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.2, 0.4, 0.92)
   bloomComposer.addPass(bloom)
 
   const mixPass = new ShaderPass(
     new THREE.ShaderMaterial({
       uniforms: {
-        baseTexture: { value: null },
+        baseTexture: { value: baseTarget.texture },
         bloomTexture: { value: bloomComposer.renderTarget2.texture },
       },
       vertexShader: MIX_VERTEX_SHADER,
       fragmentShader: MIX_FRAGMENT_SHADER,
     }),
-    'baseTexture',
   )
 
   const composer = new EffectComposer(renderer)
-  composer.addPass(renderPass)
   composer.addPass(mixPass)
 
   return {
     render(): void {
+      renderer.setRenderTarget(baseTarget)
+      renderer.setClearAlpha(0)
+      renderer.clear(true, true, true)
+      renderer.render(scene, camera)
+      renderer.setRenderTarget(null)
+
       bloomComposer.render()
       composer.render()
     },
     setSize(width: number, height: number): void {
+      const ratio = renderer.getPixelRatio()
+      baseTarget.setSize(width * ratio, height * ratio)
       composer.setSize(width, height)
       bloomComposer.setSize(width, height)
       bloom.setSize(width, height)
     },
     dispose(): void {
+      baseTarget.dispose()
       composer.dispose()
       bloomComposer.dispose()
     },
