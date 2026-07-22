@@ -133,6 +133,14 @@ new KeyboardShortcuts({
 sceneManager.addTickCallback((delta, _elapsed) => {
   physicsController.update(delta)
 
+  // Hover/gesture/spawn/manipulation pose logic only has new work when a
+  // tracking frame actually changed — the frame is throttled to 30Hz above,
+  // but this tick callback runs every rAF (up to 90-144Hz on high refresh
+  // displays). Re-running raycasts and gesture state machines against
+  // byte-identical stale data multiple times per real update was pure waste;
+  // gating them on the same clock as the data they consume cuts that out.
+  // All timing inside these (hold thresholds, menu timeouts) keys off
+  // frame.timestampMs, not wall-clock delta, so this is behavior-preserving.
   if (trackingPaused || gestureGuide.isOpen) {
     latestTrackingFrame = EMPTY_TRACKING_FRAME
     lastTrackingAtMs = -Infinity // resume instantly (no stale-interval wait) once unpaused
@@ -141,28 +149,33 @@ sceneManager.addTickCallback((delta, _elapsed) => {
     if (now - lastTrackingAtMs >= TRACKING_INTERVAL_MS) {
       lastTrackingAtMs = now
       latestTrackingFrame = handTracker.update(cameraPreview.videoElement, now)
+
+      manipulationController.updateHover(latestTrackingFrame)
+      gestureRecognizer.update(latestTrackingFrame)
+      objectSpawnController.update(latestTrackingFrame)
+      manipulationController.update(latestTrackingFrame)
+
+      const frame = latestTrackingFrame
+
+      const handGestureNames = new Map<Handedness, GestureName[]>()
+      for (const hand of frame.hands) {
+        handGestureNames.set(hand.handedness, gestureRecognizer.getActiveGestureNames(hand.handedness))
+      }
+      const frameGestureNames = gestureRecognizer.getActiveGestureNames('both')
+
+      debugOverlay.update(frame, handGestureNames, frameGestureNames)
+      cameraPreview.updateHands(frame.hands)
+
+      const allActiveGestures = [...new Set([...handGestureNames.values()].flat().concat(frameGestureNames))]
+      const averageConfidence =
+        frame.hands.length > 0 ? frame.hands.reduce((sum, hand) => sum + hand.confidence, 0) / frame.hands.length : 0
+      statsPanel.update(delta, frame.hands.length, averageConfidence, allActiveGestures)
     }
-    manipulationController.updateHover(latestTrackingFrame)
-    gestureRecognizer.update(latestTrackingFrame)
-    objectSpawnController.update(latestTrackingFrame)
-    manipulationController.update(latestTrackingFrame, delta)
   }
 
-  const frame = latestTrackingFrame
-
-  const handGestureNames = new Map<Handedness, GestureName[]>()
-  for (const hand of frame.hands) {
-    handGestureNames.set(hand.handedness, gestureRecognizer.getActiveGestureNames(hand.handedness))
-  }
-  const frameGestureNames = gestureRecognizer.getActiveGestureNames('both')
-
-  debugOverlay.update(frame, handGestureNames, frameGestureNames)
-  cameraPreview.updateHands(frame.hands)
-
-  const allActiveGestures = [...new Set([...handGestureNames.values()].flat().concat(frameGestureNames))]
-  const averageConfidence =
-    frame.hands.length > 0 ? frame.hands.reduce((sum, hand) => sum + hand.confidence, 0) / frame.hands.length : 0
-  statsPanel.update(delta, frame.hands.length, averageConfidence, allActiveGestures)
+  // Runs every rAF regardless of tracking cadence: the hover/select glow
+  // damp needs the render clock to stay visually smooth.
+  manipulationController.tick(delta)
 
   toolbar.setUndoEnabled(history.canUndo)
   toolbar.setRedoEnabled(history.canRedo)

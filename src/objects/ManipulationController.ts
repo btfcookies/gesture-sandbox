@@ -65,10 +65,18 @@ export class ManipulationController {
     this.hover.update(frame)
   }
 
-  update(frame: HandTrackingFrame, deltaSeconds: number): void {
+  update(frame: HandTrackingFrame): void {
     this.rotate.update(frame)
     this.scale.update(frame)
     this.boxSelect.update(frame)
+  }
+
+  /**
+   * Runs every render tick regardless of tracking cadence — the hover/select
+   * glow damp needs the render clock's delta to stay smooth, unlike the pose
+   * logic above which only has new work when a tracking frame arrives.
+   */
+  tick(deltaSeconds: number): void {
     updateObjectVisuals(this.objectStore, deltaSeconds)
   }
 

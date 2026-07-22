@@ -21,6 +21,13 @@ export class RadialMenu {
   private readonly items = new Map<RadialMenuSelection, HTMLButtonElement>()
   private highlighted: RadialMenuSelection | null = null
   private visible = false
+  // Center is fixed for the lifetime of one open() call (the menu doesn't
+  // move while open), so it's captured once instead of via
+  // getBoundingClientRect() on every updatePointer() — that call forces a
+  // synchronous layout, and updatePointer() runs on every render tick while
+  // the menu is open.
+  private centerX = 0
+  private centerY = 0
 
   constructor(container: HTMLElement) {
     this.root = document.createElement('div')
@@ -67,6 +74,8 @@ export class RadialMenu {
     this.root.style.left = `${screenX}px`
     this.root.style.top = `${screenY}px`
     this.root.style.display = 'block'
+    this.centerX = screenX
+    this.centerY = screenY
     this.setHighlight(null)
   }
 
@@ -78,11 +87,8 @@ export class RadialMenu {
   /** Highlights whichever wedge is angularly closest to the given screen point (e.g. the index fingertip). */
   updatePointer(screenX: number, screenY: number): void {
     if (!this.visible) return
-    const rect = this.root.getBoundingClientRect()
-    const centerX = rect.left + rect.width / 2
-    const centerY = rect.top + rect.height / 2
-    const dx = screenX - centerX
-    const dy = screenY - centerY
+    const dx = screenX - this.centerX
+    const dy = screenY - this.centerY
 
     if (Math.hypot(dx, dy) < DEAD_ZONE_PX) {
       this.setHighlight(null)

@@ -1,6 +1,6 @@
 :root {
   --bg: #0a0a0f;
-  --panel-bg: rgba(20, 20, 28, 0.6);
+  --panel-bg: rgba(20, 20, 28, 0.88);
   --panel-border: rgba(255, 255, 255, 0.08);
   --text: #e4e4e9;
   --text-dim: #8b8b96;
@@ -45,12 +45,16 @@ body {
   outline: none;
 }
 
+/* No backdrop-filter here on purpose: this panel sits above a full-viewport
+   WebGL canvas + live <video>, both redrawing every frame. backdrop-filter
+   would force the compositor to re-blur that animating backdrop on every
+   single frame, forever, just to render some text — a GPU cost invisible to
+   JS/render-loop profiling. A solid-enough background reads the same as a
+   HUD without paying that continuously. */
 .panel {
   background: var(--panel-bg);
   border: 1px solid var(--panel-border);
   border-radius: 14px;
-  backdrop-filter: blur(16px) saturate(1.4);
-  -webkit-backdrop-filter: blur(16px) saturate(1.4);
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
 }
 
@@ -179,9 +183,7 @@ body {
   height: 64px;
   border-radius: 50%;
   border: 2px solid var(--accent, var(--panel-border));
-  background: rgba(20, 20, 28, 0.8);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: rgba(20, 20, 28, 0.94);
   color: var(--text);
   font: 11px var(--sans, system-ui);
   text-transform: capitalize;
